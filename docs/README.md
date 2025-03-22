@@ -4,7 +4,7 @@
 
 Jacob Gore
 
-![Book Cover](https://covers.openlibrary.org/b/OLID/OL811478M-L.jpg)
+![Book Cover](images/cover.jpg)
 
 > to my family
 
