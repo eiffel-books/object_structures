@@ -1,0 +1,78 @@
+#!/usr/bin/env nu
+use std assert
+use std/dirs
+
+def main [] {
+
+}
+
+def "main view" [view_type:string, class_name: string, projectFile :string ] {
+    assert ($view_type in ['short', 'flat']) "the views should be one of the known ones"
+    #assert ( $sourceFile | path exists) "The source file shoud exist"
+
+    let project_name = $projectFile
+    assert ( $project_name | path exists) "The project file shoud exist"
+
+    let temp_dir = (mktemp -d XXX.eiffel)
+    let temp_file = ([$temp_dir $"($class_name).($view_type)"] | path join)
+    ^ec -config $project_name $"-($view_type)" $class_name -file $temp_file
+    cat $temp_file | expand -i --tabs 2
+    # Cleaning the temp directory.
+    rm --recursive --force $temp_dir
+}
+
+def "main for" [sourceFile: string, $projectFile:path] {
+    assert ( $sourceFile | path exists) "The source file shoud exist"
+    
+    let project_name = ( $projectFile | default ( $sourceFile | path parse --extension .e | upsert extension { 'ecf' } | path join ))
+    assert ( $project_name | path exists) "The project file shoud exist"
+
+    ^ec -config $project_name -pretty $sourceFile | expand -i --tabs 2
+}
+
+# List the contents of a file at a certain revision
+# Usage:
+#   code-listing <file> [--revision <rev>]
+# Example:
+#   code-listing ./my_dir/my_file.e --revision 33cd
+#   code-listing ./my_dir/my_file.e
+def "main file" [
+    file:string, # file contents to display
+    --tag:string = "HEAD" # revision or tag to checkout for the file
+    ] {
+    
+    # Get the repository's root directory.
+    let repo_root = (git rev-parse --show-toplevel | str trim)
+    
+    # Expand the provided file path to an absolute path.
+    let abs_file = ($file | path expand)
+    
+    # Compute the file's path relative to the repository root.
+    # (Assumes that the file is inside the repo.)
+    let relative_path = ( $abs_file  | path relative-to $repo_root)
+    
+    # Use 'git show' to retrieve the file's contents at the given revision.
+    #git -C $repo_root show ($tag + ":" + $relative_path) | expand --tabs 2 
+
+    let temp_dir = (mktemp -d XXX.eiffel)
+    git worktree add --detach $temp_dir $tag 
+    dirs add $temp_dir
+    let $project_name = $relative_path | find_project_file 
+    ^ec -config $project_name -pretty $relative_path | expand --initial --tabs 1 -
+    # Cleaning the temp directory.
+    dirs drop
+    rm --recursive --force $temp_dir
+}
+
+def find_project_file []: path -> path {
+    let class_file = $in
+    assert ($class_file | path exists) $"File doesn't exist, given: ($class_file)"
+    let current_dir = $class_file | path dirname
+    let $search_result = glob ([ $current_dir "*.ecf" ] | path join)
+    if ($search_result | is-empty) {
+        $current_dir | find_project_file
+    } else {
+        assert (1 == ($search_result | length)) $"There should only be one project file, given: ($search_result)"
+        $search_result.0
+    }
+}
